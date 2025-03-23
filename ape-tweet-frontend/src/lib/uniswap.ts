@@ -1,38 +1,14 @@
-import { Token, CurrencyAmount, Percent, TradeType } from "@uniswap/sdk-core";
-import { Route, SwapQuoter, SwapRouter, Trade } from "@uniswap/v3-sdk";
-import { createPublicClient, http, Address, Hex } from "viem";
-import { base } from "viem/chains";
+import { Token } from "@uniswap/sdk-core";
 import {
-  UNISWAP_QUOTER_ADDRESS,
-  UNISWAP_SWAP_ROUTER_ADDRESS,
-} from "./constants";
+  createPublicClient,
+  http,
+  Address,
+  Hex,
+  encodeFunctionData,
+} from "viem";
+import { base } from "viem/chains";
+import { UNISWAP_SWAP_ROUTER_ADDRESS } from "./constants";
 import { PrivyClient } from "@privy-io/server-auth";
-
-// ABI snippets
-const poolAbi = [
-  {
-    inputs: [],
-    name: "slot0",
-    outputs: [
-      { name: "sqrtPriceX96", type: "uint160" },
-      { name: "tick", type: "int24" },
-      { name: "observationIndex", type: "uint16" },
-      { name: "observationCardinality", type: "uint16" },
-      { name: "observationCardinalityNext", type: "uint16" },
-      { name: "feeProtocol", type: "uint8" },
-      { name: "unlocked", type: "bool" },
-    ],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "liquidity",
-    outputs: [{ name: "", type: "uint128" }],
-    stateMutability: "view",
-    type: "function",
-  },
-] as const;
 
 // Create Viem clients
 export const publicClient = createPublicClient({
@@ -40,85 +16,110 @@ export const publicClient = createPublicClient({
   transport: http(),
 });
 
-export const getPoolInfo = async (poolAddress: Address) => {
-  const [slot0, liquidity] = await Promise.all([
-    publicClient.readContract({
-      address: poolAddress,
-      abi: poolAbi,
-      functionName: "slot0",
-    }),
-    publicClient.readContract({
-      address: poolAddress,
-      abi: poolAbi,
-      functionName: "liquidity",
-    }),
-  ]);
-
-  return {
-    liquidity: liquidity.toString(),
-    sqrtPriceX96: slot0[0].toString(),
-    tick: slot0[1],
-  };
-};
-
-export const getOutputQuote = async (
-  route: Route<Token, Token>,
-  amountIn: bigint,
-  tokenIn: Token
-) => {
-  const { calldata } = await SwapQuoter.quoteCallParameters(
-    route,
-    CurrencyAmount.fromRawAmount(tokenIn, amountIn.toString()),
-    TradeType.EXACT_INPUT,
-    {
-      useQuoterV2: true,
-    }
-  );
-
-  const quoteCallReturnData = await publicClient.call({
-    to: UNISWAP_QUOTER_ADDRESS,
-    data: calldata as `0x${string}`,
-  });
-
-  return quoteCallReturnData.data;
-};
+// SwapRouter02 ABI for exactInputSingle
+const swapRouterAbi = [
+  {
+    inputs: [
+      {
+        components: [
+          {
+            name: "tokenIn",
+            type: "address",
+          },
+          {
+            name: "tokenOut",
+            type: "address",
+          },
+          {
+            name: "fee",
+            type: "uint24",
+          },
+          {
+            name: "recipient",
+            type: "address",
+          },
+          {
+            name: "amountIn",
+            type: "uint256",
+          },
+          {
+            name: "amountOutMinimum",
+            type: "uint256",
+          },
+          {
+            name: "sqrtPriceLimitX96",
+            type: "uint160",
+          },
+        ],
+        name: "params",
+        type: "tuple",
+      },
+    ],
+    name: "exactInputSingle",
+    outputs: [
+      {
+        name: "amountOut",
+        type: "uint256",
+      },
+    ],
+    stateMutability: "payable",
+    type: "function",
+  },
+] as const;
 
 export const executeSwap = async (
   privy: PrivyClient,
   walletId: string,
-  route: Route<Token, Token>,
   amountIn: Hex,
-  amountOut: Hex,
   tokenIn: Token,
   tokenOut: Token,
   recipient: Address
 ) => {
-  const options = {
-    slippageTolerance: new Percent(50, 10_000), // 50 bips, or 0.50%
-    deadline: Math.floor(Date.now() / 1000) + 60 * 20, // 20 minutes
-    recipient,
-  };
+  // First approve the router to spend tokens
+  const approvalData = `0x095ea7b3${UNISWAP_SWAP_ROUTER_ADDRESS.slice(
+    2
+  ).padStart(64, "0")}${amountIn.slice(2).padStart(64, "0")}` as `0x${string}`;
 
-  const trade = Trade.createUncheckedTrade({
-    route,
-    inputAmount: CurrencyAmount.fromRawAmount(tokenIn, amountIn),
-    outputAmount: CurrencyAmount.fromRawAmount(tokenOut, amountOut),
-    tradeType: TradeType.EXACT_INPUT,
+  const approvalTx = await privy.walletApi.ethereum.sendTransaction({
+    walletId,
+    caip2: "eip155:8453",
+    transaction: {
+      to: tokenIn.address as `0x${string}`,
+      data: approvalData,
+      chainId: 8453,
+    },
   });
 
-  console.log("trade", trade);
+  // Wait for approval to be mined
+  await publicClient.waitForTransactionReceipt({
+    hash: approvalTx.hash as `0x${string}`,
+  });
 
-  const methodParameters = SwapRouter.swapCallParameters([trade], options);
+  // Encode the swap parameters
+  const swapData = encodeFunctionData({
+    abi: swapRouterAbi,
+    functionName: "exactInputSingle",
+    args: [
+      {
+        tokenIn: tokenIn.address as Address,
+        tokenOut: tokenOut.address as Address,
+        fee: 3000, // 0.3%
+        recipient,
+        amountIn: BigInt(amountIn),
+        amountOutMinimum: BigInt(0), // No minimum (be careful with this in production!)
+        sqrtPriceLimitX96: BigInt(0), // No limit
+      },
+    ],
+  });
 
-  console.log("methodParameters", methodParameters);
-
+  // Execute the swap
   const { hash } = await privy.walletApi.ethereum.sendTransaction({
     walletId,
     caip2: "eip155:8453",
     transaction: {
       to: UNISWAP_SWAP_ROUTER_ADDRESS,
-      value: methodParameters.value as Hex,
-      data: methodParameters.calldata as Address,
+      data: swapData,
+      value: tokenIn.isNative ? amountIn : "0x0",
       chainId: 8453,
     },
   });
