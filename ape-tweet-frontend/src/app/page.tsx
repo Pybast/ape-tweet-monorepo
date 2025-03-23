@@ -7,30 +7,7 @@ import { TweetSimulator } from "../components/TweetSimulator";
 import { TokenInfoCard } from "../components/TokenInfoCard";
 import { SwapButton } from "../components/SwapButton";
 import { TxStatus } from "../components/TxStatus";
-
-interface TokenInfo {
-  fromToken: {
-    symbol: string;
-    amount: string;
-    address?: string;
-  };
-  toToken: {
-    symbol: string;
-    amount: string;
-    address?: string;
-  };
-}
-
-interface WalletInfo {
-  frontendWallet?: {
-    address: string;
-  };
-  backendWallet?: {
-    id: string;
-    address: string;
-    chainType: string;
-  };
-}
+import { TokenInfo, WalletInfo } from "./types";
 
 export default function Home() {
   const { authenticated, ready, user } = usePrivy();
@@ -217,7 +194,7 @@ export default function Home() {
               onTweetSubmit={handleTweetSubmit}
               isLoading={isLoading}
               error={error}
-              tokenData={tokenInfo?.fromToken}
+              tokenData={tokenInfo}
             />
 
             {tokenInfo && (

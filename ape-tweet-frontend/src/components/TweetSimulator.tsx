@@ -1,16 +1,11 @@
+import { TokenInfo } from "@/app/types";
 import { useState } from "react";
-
-interface TokenData {
-  symbol: string;
-  amount: string;
-  address?: string;
-}
 
 interface TweetSimulatorProps {
   onTweetSubmit: (tweet: string) => void;
   isLoading?: boolean;
   error?: string | null;
-  tokenData?: TokenData | null;
+  tokenData?: TokenInfo | null;
 }
 
 export const TweetSimulator = ({
@@ -53,10 +48,11 @@ export const TweetSimulator = ({
         <div className="bg-green-50 border border-green-200 rounded-md p-4">
           <div className="text-sm text-green-800">
             <div>
-              Address: <code className="font-mono">{tokenData.address}</code>
+              Address:{" "}
+              <code className="font-mono">{tokenData.toToken.address}</code>
             </div>
             <div className="mt-1">
-              Amount: {tokenData.amount} {tokenData.symbol}
+              Amount: {tokenData.toToken.amount} {tokenData.toToken.symbol}
             </div>
           </div>
         </div>

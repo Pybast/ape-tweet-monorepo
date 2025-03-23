@@ -1,13 +1,4 @@
-interface TokenInfo {
-  fromToken: {
-    symbol: string;
-    amount: string;
-  };
-  toToken: {
-    symbol: string;
-    amount: string;
-  };
-}
+import { TokenInfo } from "@/app/types";
 
 interface TokenInfoCardProps {
   tokenInfo: TokenInfo | null;
