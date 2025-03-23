@@ -15,7 +15,7 @@ export const TweetSimulator = ({
   tokenData = null,
 }: TweetSimulatorProps) => {
   const [tweet, setTweet] = useState(
-    "New ticker in town, address is 0x8b67f2E56139cA052a7EC49cBCd1aA9c83F2752a"
+    "New ticker in town, address is 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
   );
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -35,7 +35,7 @@ export const TweetSimulator = ({
           id="tweet"
           rows={3}
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm text-gray-900 bg-white"
-          placeholder="New ticker in town, address is 0x8b67f2E56139cA052a7EC49cBCd1aA9c83F2752a"
+          placeholder="New ticker in town, address is 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
           value={tweet}
           onChange={(e) => setTweet(e.target.value)}
           disabled={isLoading}
