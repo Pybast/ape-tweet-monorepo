@@ -1,16 +1,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { usePrivy, useCreateWallet } from "@privy-io/react-auth";
+import { usePrivy } from "@privy-io/react-auth";
 import { ConnectWalletButton } from "../components/ConnectWalletButton";
 import { TweetSimulator } from "../components/TweetSimulator";
 import { TokenInfoCard } from "../components/TokenInfoCard";
 import { SwapButton } from "../components/SwapButton";
 import { TxStatus } from "../components/TxStatus";
-import { TokenInfo, WalletInfo } from "./types";
+import { TokenInfo } from "./types";
+import { Address } from "viem";
 
 export default function Home() {
-  const { authenticated, ready, user } = usePrivy();
+  const { authenticated, ready, getAccessToken } = usePrivy();
   const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [txStatus, setTxStatus] = useState<
@@ -18,61 +19,58 @@ export default function Home() {
   >("idle");
   const [txHash, setTxHash] = useState<string | undefined>();
   const [error, setError] = useState<string | undefined>();
-  const [walletInfo, setWalletInfo] = useState<WalletInfo | null>(null);
+  const [privyWallet, setPrivyWallet] = useState<Address | null>(null);
   const [isCheckingWallet, setIsCheckingWallet] = useState(false);
-
-  const { createWallet } = useCreateWallet({
-    onSuccess: async ({ wallet }) => {
-      try {
-        // Create backend wallet
-        const response = await fetch("/api/create-wallet", { method: "POST" });
-        if (!response.ok) throw new Error("Backend wallet creation failed");
-
-        const backendWallet = await response.json();
-        setWalletInfo({
-          frontendWallet: { address: wallet.address },
-          backendWallet,
-        });
-      } catch (err) {
-        console.error("Failed to create backend wallet:", err);
-      }
-    },
-    onError: (error) => {
-      console.error("Failed to create frontend wallet:", error);
-    },
-  });
 
   useEffect(() => {
     async function checkAndCreateWallet() {
-      if (!ready || !authenticated || walletInfo || isCheckingWallet) return;
+      if (!ready || !authenticated || privyWallet || isCheckingWallet) return;
 
       setIsCheckingWallet(true);
       try {
-        // Check if user already has a wallet
-        if (user?.wallet?.address) {
-          // Check if backend wallet exists
-          const response = await fetch("/api/create-wallet", {
-            method: "POST",
-          });
-          const backendWallet = await response.json();
+        const accessToken = await getAccessToken();
 
-          setWalletInfo({
-            frontendWallet: { address: user.wallet.address },
-            backendWallet,
-          });
-        } else {
-          // Create new wallet if none exists
-          createWallet({ createAdditional: false });
+        // First check if wallet exists
+        const response = await fetch("/api/wallet", {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
+
+        if (response.ok) {
+          const wallet = await response.json();
+          setPrivyWallet(wallet.address);
+          return;
         }
+
+        if (response.status !== 404) {
+          throw new Error("Failed to check wallet status");
+        }
+
+        // If no wallet exists (404), create one
+        const createResponse = await fetch("/api/wallet", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
+
+        if (!createResponse.ok) {
+          throw new Error("Failed to create wallet");
+        }
+
+        const newWallet = await createResponse.json();
+        setPrivyWallet(newWallet.address);
       } catch (err) {
         console.error("Error checking/creating wallet:", err);
+        setError(err instanceof Error ? err.message : "Failed to setup wallet");
       } finally {
         setIsCheckingWallet(false);
       }
     }
 
     checkAndCreateWallet();
-  }, [ready, authenticated, walletInfo, user, createWallet, isCheckingWallet]);
+  }, [ready, authenticated, privyWallet, getAccessToken, isCheckingWallet]);
 
   const handleTweetSubmit = async (tweet: string) => {
     setIsLoading(true);
@@ -123,16 +121,16 @@ export default function Home() {
       setTxStatus("pending");
       setError(undefined);
 
-      if (!walletInfo?.frontendWallet?.address) {
-        throw new Error("No wallet found");
-      }
+      const accessToken = await getAccessToken();
 
       const response = await fetch("/api/execute-swap", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
         body: JSON.stringify({
           ...tokenInfo,
-          walletId: walletInfo.frontendWallet.address,
         }),
       });
 
@@ -160,31 +158,18 @@ export default function Home() {
 
         {authenticated && (
           <div className="space-y-6">
-            {walletInfo ? (
+            {privyWallet ? (
               <div className="bg-white rounded-lg shadow-lg p-6">
                 <h2 className="text-xl font-medium text-gray-900 mb-4">
-                  Your Wallets
+                  Your Privy Wallet
                 </h2>
-                <div className="space-y-4">
-                  {walletInfo.frontendWallet && (
-                    <div>
-                      <p className="text-sm text-gray-500">Frontend Wallet</p>
-                      <p className="text-sm font-mono text-gray-900">
-                        {walletInfo.frontendWallet.address}
-                      </p>
-                    </div>
-                  )}
-                  {walletInfo.backendWallet && (
-                    <div>
-                      <p className="text-sm text-gray-500">Backend Wallet</p>
-                      <p className="text-sm font-mono text-gray-900">
-                        {walletInfo.backendWallet.address}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        ID: {walletInfo.backendWallet.id}
-                      </p>
-                    </div>
-                  )}
+                <div>
+                  <p className="text-sm font-mono text-gray-900">
+                    {privyWallet}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Send ETH to this address
+                  </p>
                 </div>
               </div>
             ) : (
@@ -192,7 +177,6 @@ export default function Home() {
                 <div className="animate-pulse space-y-4">
                   <div className="h-4 bg-gray-200 rounded w-1/4"></div>
                   <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                  <div className="h-4 bg-gray-200 rounded w-1/2"></div>
                 </div>
               </div>
             )}

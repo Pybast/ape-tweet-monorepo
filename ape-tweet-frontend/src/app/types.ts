@@ -1,22 +1,10 @@
-export interface TokenInfo {
-  fromToken: {
-    symbol: string;
-    amount: string;
-  };
-  toToken: {
-    symbol: string;
-    amount: string;
-    address: string;
-  };
+export interface TokenData {
+  symbol: string;
+  amount: string;
+  address?: string;
 }
 
-export interface WalletInfo {
-  frontendWallet?: {
-    address: string;
-  };
-  backendWallet?: {
-    id: string;
-    address: string;
-    chainType: string;
-  };
+export interface TokenInfo {
+  fromToken: TokenData;
+  toToken: TokenData;
 }
