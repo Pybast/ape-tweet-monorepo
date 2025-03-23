@@ -1,4 +1,5 @@
 import { TokenInfo } from "@/app/types";
+import { formatEther } from "viem";
 
 interface TokenInfoCardProps {
   tokenInfo: TokenInfo | null;
@@ -31,7 +32,8 @@ export const TokenInfoCard = ({
         <div>
           <p className="text-sm text-gray-500">From</p>
           <p className="text-lg font-medium text-gray-900">
-            {tokenInfo.fromToken.amount} {tokenInfo.fromToken.symbol}
+            {formatEther(BigInt(tokenInfo.fromToken.amount))}{" "}
+            {tokenInfo.fromToken.symbol}
           </p>
         </div>
         <div className="flex justify-center">

@@ -123,10 +123,17 @@ export default function Home() {
       setTxStatus("pending");
       setError(undefined);
 
+      if (!walletInfo?.frontendWallet?.address) {
+        throw new Error("No wallet found");
+      }
+
       const response = await fetch("/api/execute-swap", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(tokenInfo),
+        body: JSON.stringify({
+          ...tokenInfo,
+          walletId: walletInfo.frontendWallet.address,
+        }),
       });
 
       if (!response.ok) {

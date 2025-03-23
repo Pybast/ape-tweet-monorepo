@@ -1,13 +1,12 @@
 import { Token, CurrencyAmount, Percent, TradeType } from "@uniswap/sdk-core";
 import { Route, SwapQuoter, SwapRouter, Trade } from "@uniswap/v3-sdk";
-import { createPublicClient, http, WalletClient, Address } from "viem";
+import { createPublicClient, http, Address, Hex } from "viem";
 import { base } from "viem/chains";
 import {
   UNISWAP_QUOTER_ADDRESS,
   UNISWAP_SWAP_ROUTER_ADDRESS,
-  MAX_FEE_PER_GAS,
-  MAX_PRIORITY_FEE_PER_GAS,
 } from "./constants";
+import { PrivyClient } from "@privy-io/server-auth";
 
 // ABI snippets
 const poolAbi = [
@@ -85,10 +84,11 @@ export const getOutputQuote = async (
 };
 
 export const executeSwap = async (
-  walletClient: WalletClient,
+  privy: PrivyClient,
+  walletId: string,
   route: Route<Token, Token>,
-  amountIn: bigint,
-  amountOut: bigint,
+  amountIn: Hex,
+  amountOut: Hex,
   tokenIn: Token,
   tokenOut: Token,
   recipient: Address
@@ -101,21 +101,27 @@ export const executeSwap = async (
 
   const trade = Trade.createUncheckedTrade({
     route,
-    inputAmount: CurrencyAmount.fromRawAmount(tokenIn, amountIn.toString()),
-    outputAmount: CurrencyAmount.fromRawAmount(tokenOut, amountOut.toString()),
+    inputAmount: CurrencyAmount.fromRawAmount(tokenIn, amountIn),
+    outputAmount: CurrencyAmount.fromRawAmount(tokenOut, amountOut),
     tradeType: TradeType.EXACT_INPUT,
   });
 
+  console.log("trade", trade);
+
   const methodParameters = SwapRouter.swapCallParameters([trade], options);
 
-  const hash = await walletClient.sendTransaction({
-    account: recipient,
-    chain: base,
-    data: methodParameters.calldata as `0x${string}`,
-    to: UNISWAP_SWAP_ROUTER_ADDRESS,
-    value: BigInt(methodParameters.value),
-    maxFeePerGas: MAX_FEE_PER_GAS,
-    maxPriorityFeePerGas: MAX_PRIORITY_FEE_PER_GAS,
+  console.log("methodParameters", methodParameters);
+
+  const { hash } = await privy.walletApi.ethereum.sendTransaction({
+    walletId,
+    caip2: "eip155:8453",
+    transaction: {
+      to: UNISWAP_SWAP_ROUTER_ADDRESS,
+      value: methodParameters.value as Hex,
+      data: methodParameters.calldata as Address,
+      chainId: 8453,
+    },
   });
+
   return hash;
 };

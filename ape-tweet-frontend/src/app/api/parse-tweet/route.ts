@@ -24,6 +24,11 @@ export async function POST(request: Request) {
       );
     }
 
+    return NextResponse.json({
+      address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      amount: 10000000000000,
+    });
+
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -38,7 +43,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       address: parsedResponse.address,
-      amount: 0.00001,
+      amount: 10000000000000,
     });
   } catch (error) {
     console.error("Error parsing tweet:", error);

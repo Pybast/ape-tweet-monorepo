@@ -2,12 +2,11 @@ export interface TokenInfo {
   fromToken: {
     symbol: string;
     amount: string;
-    address?: string;
   };
   toToken: {
     symbol: string;
     amount: string;
-    address?: string;
+    address: string;
   };
 }
 
